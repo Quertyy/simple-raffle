@@ -1,0 +1,135 @@
+// Imports
+#include "huffmate/auth/NonPayable.huff"
+#include "huffmate/data-structures/Hashmap.huff"
+
+/* Interface */
+#define function enter() payable returns ()
+
+#define function createRaffle() nonpayable returns ()
+#define function drawWinner() nonpayable returns ()
+
+#define function winnerOf(uint256) view returns (address)
+#define function totalPrizeOf(uint256) view returns (uint256)
+
+#define function userTicketsQuantity(address,uint256) view returns (uint256)
+#define function raffleTicketsQuantity(uint256) view returns (uint256)
+
+#define function owner() view returns (address)
+
+// Events
+#define event registered(address indexed,uint256)
+#define event drawn(address indexed,uint256,uint256)
+
+// ****** Storage Slots ****** \\
+// owner
+#define constant OWNER_SLOT = FREE_STORAGE_POINTER()
+// current raffle Id
+#define constant CURRENT_RAFFLE_SLOT = FREE_STORAGE_POINTER()
+// max tickets per raffle for a single user
+#define constant MAX_USER_TICKETS = FREE_STORAGE_POINTER()
+// max tickets per raffle
+#define constant MAX_TICKETS_SLOT = FREE_STORAGE_POINTER()
+// current tickets count for a given raffle
+#define constant RAFFLE_TICKETS_QUANTITY_SLOT = FREE_STORAGE_POINTER()
+// current user's tickets count for a given raffle
+#define constant USER_TICKETS_QUANTITY_SLOT = FREE_STORAGE_POINTER()
+// winner of a given raffle
+#define constant WINNER_SLOT = FREE_STORAGE_POINTER()
+// max time for a raffle
+#define constant RAFFLE_DURATION_SLOT = FREE_STORAGE_POINTER()
+// users registered for a given raffle
+#define constant REGISTRATIONS_SLOT = FREE_STORAGE_POINTER()
+
+#define macro ONLY_OWNER() = takes (0) returns (0) {
+    caller
+    [OWNER_SLOT] sload
+    eq
+    is_owner jumpi
+    0x00 0x00 revert
+    is_owner:
+}
+
+#define macro CONSTRUCTOR() = takes (0) returns (0) {
+    caller [OWNER_SLOT] sstore
+}
+
+#define macro GET_OWNER() = takes (0) returns (0) {
+    // Load value from storage.
+    [OWNER_SLOT]         // [OWNER_PTR]
+    sload                // [address]
+
+    // Store value in memory.
+    0x00 mstore
+
+    // Return value
+    0x20 0x00 return
+}
+
+/// @notice Enter raffle
+/// @notice Payable function that register an user to the current raffle.
+#define macro ENTER() = takes (0) returns (0) {
+    // check if tickets qty + raffle current registration count is less than maxTickets
+    0x04 calldataload               // [ticketsQty]
+    dup1                            // [ticketsQty, ticketsQty]
+    [CURRENT_RAFFLE_SLOT]  sload    // [currentRaffleId, ticketsQty, ticketsQty]
+    dup1                            // [currentRaffleId, currentRaffleId, ticketsQty, ticketsQty]
+    [RAFFLE_TICKETS_QUANTITY_SLOT]  // [slot, currentRaffleId, currentRaffleId, ticketsQty, ticketsQty]
+    LOAD_ELEMENT_FROM_KEYS(0x00)    // [value, currentRaffleId, ticketsQty, ticketsQty]
+    swap3                           // [ticketsQty, value, currentRaffleId, ticketsQty]
+    add                             // [ticketsQty + value, currentRaffleId, ticketsQty]
+    [MAX_TICKETS_SLOT] sload        // [20, result, currentRaffleId, ticketsQty]
+    lt                              // [20 < result, currentRaffleId, ticketsQty]
+    maxRaffleTickets jumpi          // [currentRaffleId, ticketsQty]
+
+    // check if ticketsQty + user's raffle registration count is less than maxUserTickets
+    // usersBalance[address][raffleId] + ticketsQty > maxUserTickets ? revert
+    caller                          // [msg.sender, currentRaffleId, ticketsQty]
+    [USER_TICKETS_QUANTITY_SLOT]    // [slot, msg.sender, currentRaffleId, ticketsQty]
+    LOAD_ELEMENT_FROM_KEYS_2D(0x00) // [value, ticketsQty]
+    dup2                            // [ticketsQty, value, ticketsQty]
+    add                             // [ticketsQty + value, ticketsQty]
+    [MAX_USER_TICKETS] sload        // [maxTicketsPerUser, result, ticketsQty]
+    lt                              // [maxTicketsPerUser < result, ticketsQty]
+    maxRaffleTickets jumpi
+
+
+    maxRaffleTickets:
+        0x00 0x00 revert            // []
+}
+
+#define macro MAIN() = takes (0) returns (0) {
+    0x00 calldataload 0xe0 shr // [sig]
+    // Input Stack: [function_selector]
+    dup1 __FUNC_SIG(enter)                  eq enterJump                    jumpi
+    dup1 __FUNC_SIG(createRaffle)           eq createRaffleJump             jumpi
+    dup1 __FUNC_SIG(drawWinner)             eq drawWinnerJump               jumpi
+
+    dup1 __FUNC_SIG(winnerOf)               eq winnerOfJump                 jumpi
+    dup1 __FUNC_SIG(totalPrizeOf)           eq totalPrizeOfJump             jumpi
+
+    dup1 __FUNC_SIG(userTicketsQuantity)    eq userTicketsQuantityJump      jumpi
+    dup1 __FUNC_SIG(raffleTicketsQuantity)  eq raffleTicketsQuantityJump    jumpi
+
+    dup1 __FUNC_SIG(owner)                  eq ownerJump                    jumpi
+
+    no_match jump
+
+    enterJump:
+        ENTER()
+    createRaffleJump:
+        //CREATE_RAFFLE()
+    drawWinnerJump:
+        //DRAW_WINNER()
+    winnerOfJump:
+        //WINNER_OF()
+    totalPrizeOfJump:
+        //TOTAL_PRIZE_OF()
+    userTicketsQuantityJump:
+        //USER_TICKETS_QUANTITY()
+    raffleTicketsQuantityJump:
+        //RAFFLE_TICKETS_QUANTITY()
+    ownerJump:
+        GET_OWNER()
+        
+    no_match:
+}
