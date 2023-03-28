@@ -20,16 +20,16 @@ interface SimpleRaffle {
 
 contract SimpleRaffleTest is Test {
 
-    // The System under Test.
-    SimpleRaffle sut;
+    
+    SimpleRaffle raffle;
 
     function setUp() public {
         address impl = HuffDeployer.deploy("SimpleRaffle");
-        sut = SimpleRaffle(impl);
+        raffle = SimpleRaffle(impl);
     }
 
     function testDeploymentOwnerValue() public {
-        assertEq(sut.owner(), address(this));
+        assertEq(raffle.owner(), address(this));
     }
 
 
