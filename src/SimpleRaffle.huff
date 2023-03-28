@@ -15,34 +15,32 @@
 #define function raffleTicketsQuantity(uint256) view returns (uint256)
 
 #define function owner() view returns (address)
-
+#define function price() view returns (uint256)
 // Events
 #define event registered(address indexed,uint256)
 #define event drawn(address indexed,uint256,uint256)
 
 // ****** Storage Slots ****** \\
 // owner
-#define constant OWNER_SLOT = FREE_STORAGE_POINTER()
+#define constant OWNER = FREE_STORAGE_POINTER()
 // current raffle Id
-#define constant CURRENT_RAFFLE_SLOT = FREE_STORAGE_POINTER()
+#define constant RAFFLE_ID = FREE_STORAGE_POINTER()
 // max tickets per raffle for a single user
 #define constant MAX_USER_TICKETS = FREE_STORAGE_POINTER()
 // max tickets per raffle
-#define constant MAX_TICKETS_SLOT = FREE_STORAGE_POINTER()
+#define constant MAX_TICKETS = FREE_STORAGE_POINTER()
 // current tickets count for a given raffle
-#define constant RAFFLE_TICKETS_QUANTITY_SLOT = FREE_STORAGE_POINTER()
+#define constant RAFFLE_STRUCT = FREE_STORAGE_POINTER()
 // current user's tickets count for a given raffle
-#define constant USER_TICKETS_QUANTITY_SLOT = FREE_STORAGE_POINTER()
-// winner of a given raffle
-#define constant WINNER_SLOT = FREE_STORAGE_POINTER()
-// max time for a raffle
-#define constant RAFFLE_DURATION_SLOT = FREE_STORAGE_POINTER()
+#define constant USER_MAP = FREE_STORAGE_POINTER()
 // users registered for a given raffle
-#define constant REGISTRATIONS_SLOT = FREE_STORAGE_POINTER()
+#define constant PARTICIPANTS = FREE_STORAGE_POINTER()
+// price = 0.5 ether
+#define constant PRICE = FREE_STORAGE_POINTER()
 
 #define macro ONLY_OWNER() = takes (0) returns (0) {
     caller
-    [OWNER_SLOT] sload
+    [OWNER] sload
     eq
     is_owner jumpi
     0x00 0x00 revert
@@ -50,12 +48,16 @@
 }
 
 #define macro CONSTRUCTOR() = takes (0) returns (0) {
-    caller [OWNER_SLOT] sstore
+    caller [OWNER] sstore      // []
+    0x01 [RAFFLE_ID] sstore  // []
+    0x5f [MAX_TICKETS] sstore
+    0x03 [MAX_USER_TICKETS] sstore
+    0x6f05b59d3b20000 [PRICE] sstore
 }
 
 #define macro GET_OWNER() = takes (0) returns (0) {
     // Load value from storage.
-    [OWNER_SLOT]         // [OWNER_PTR]
+    [OWNER]         // [OWNER_PTR]
     sload                // [address]
 
     // Store value in memory.
@@ -65,35 +67,35 @@
     0x20 0x00 return
 }
 
+#define macro GET_PRICE() = takes (0) returns (0) {
+    [PRICE] sload
+    0x00 mstore
+
+    0x20 0x00 return
+}
+// struct raffleInfo slot1
+// uint88 totalPrize        uint8 ticketsCount              address winner
+// 0003000000000000000000         08            019f82740818b6f37B7175de42702FE9359ea7Da
+
+
+// struct raffleInfo slot2
+// 
+// 0x019f82740818b6f37B7175de42702FE9359ea7Da
 /// @notice Enter raffle
 /// @notice Payable function that register an user to the current raffle.
 #define macro ENTER() = takes (0) returns (0) {
     // check if tickets qty + raffle current registration count is less than maxTickets
-    0x04 calldataload               // [ticketsQty]
-    dup1                            // [ticketsQty, ticketsQty]
-    [CURRENT_RAFFLE_SLOT]  sload    // [currentRaffleId, ticketsQty, ticketsQty]
-    dup1                            // [currentRaffleId, currentRaffleId, ticketsQty, ticketsQty]
-    [RAFFLE_TICKETS_QUANTITY_SLOT]  // [slot, currentRaffleId, currentRaffleId, ticketsQty, ticketsQty]
-    LOAD_ELEMENT_FROM_KEYS(0x00)    // [value, currentRaffleId, ticketsQty, ticketsQty]
-    swap3                           // [ticketsQty, value, currentRaffleId, ticketsQty]
-    add                             // [ticketsQty + value, currentRaffleId, ticketsQty]
-    [MAX_TICKETS_SLOT] sload        // [20, result, currentRaffleId, ticketsQty]
-    lt                              // [20 < result, currentRaffleId, ticketsQty]
-    maxRaffleTickets jumpi          // [currentRaffleId, ticketsQty]
-
-    // check if ticketsQty + user's raffle registration count is less than maxUserTickets
-    // usersBalance[address][raffleId] + ticketsQty > maxUserTickets ? revert
-    caller                          // [msg.sender, currentRaffleId, ticketsQty]
-    [USER_TICKETS_QUANTITY_SLOT]    // [slot, msg.sender, currentRaffleId, ticketsQty]
-    LOAD_ELEMENT_FROM_KEYS_2D(0x00) // [value, ticketsQty]
-    dup2                            // [ticketsQty, value, ticketsQty]
-    add                             // [ticketsQty + value, ticketsQty]
-    [MAX_USER_TICKETS] sload        // [maxTicketsPerUser, result, ticketsQty]
-    lt                              // [maxTicketsPerUser < result, ticketsQty]
-    maxRaffleTickets jumpi
-
+    0x04 calldata                               // [qty]
+    [RAFFLE_ID] sload                           // [raffleId, qty]
+    dup1                                        // [raffleId, raffleId, qty]
+    [RAFFLE_STRUCT]                             // [raffleSlot, raffleId, raffleId, qty]
+    LOAD_ELEMENT_FROM_KEYS(0x00)                // [raffleInfo[raffleId]]
+    // 
 
     maxRaffleTickets:
+        0x00 0x00 revert            // []
+
+    notEnoughEth:
         0x00 0x00 revert            // []
 }
 
@@ -111,11 +113,11 @@
     dup1 __FUNC_SIG(raffleTicketsQuantity)  eq raffleTicketsQuantityJump    jumpi
 
     dup1 __FUNC_SIG(owner)                  eq ownerJump                    jumpi
-
+    dup1 __FUNC_SIG(price)                  eq priceJump                    jumpi
     no_match jump
 
     enterJump:
-        ENTER()
+        //ENTER()
     createRaffleJump:
         //CREATE_RAFFLE()
     drawWinnerJump:
@@ -130,6 +132,8 @@
         //RAFFLE_TICKETS_QUANTITY()
     ownerJump:
         GET_OWNER()
-        
+    priceJump:
+        GET_PRICE()
+
     no_match:
 }
